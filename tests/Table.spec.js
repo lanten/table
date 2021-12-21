@@ -1,7 +1,7 @@
 import React from 'react';
 import { mount } from 'enzyme';
 import { resetWarned } from 'rc-util/lib/warning';
-import Table from '../src';
+import Table, { INTERNAL_COL_DEFINE } from '../src';
 import { INTERNAL_HOOKS } from '../src/Table';
 
 describe('Table.Basic', () => {
@@ -446,6 +446,7 @@ describe('Table.Basic', () => {
       expect(wrapper.find('tbody tr').length).toBeTruthy();
       wrapper.find('tbody tr').forEach((tr, index) => {
         expect(tr.props().id).toEqual(`row-${data[index].key}`);
+        expect(tr.simulate.bind(tr, 'click')).not.toThrowError();
       });
     });
 
@@ -731,7 +732,7 @@ describe('Table.Basic', () => {
       }),
     );
 
-    expect(wrapper.find('tbody Cell').first().key()).toBeTruthy();
+    expect(wrapper.find('tbody WrappedCell').first().key()).toBeTruthy();
   });
 
   it('syntactic sugar', () => {
@@ -749,15 +750,40 @@ describe('Table.Basic', () => {
   });
 
   describe('internal api', () => {
-    it('transformColumns', () => {
-      const wrapper = mount(
-        createTable({
-          internalHooks: INTERNAL_HOOKS,
-          transformColumns: columns => [{ title: 'before' }, ...columns, { title: 'after' }],
-        }),
-      );
+    describe('transformColumns', () => {
+      it('basic', () => {
+        const wrapper = mount(
+          createTable({
+            internalHooks: INTERNAL_HOOKS,
+            transformColumns: columns => [{ title: 'before' }, ...columns, { title: 'after' }],
+          }),
+        );
 
-      expect(wrapper.render()).toMatchSnapshot();
+        expect(wrapper.render()).toMatchSnapshot();
+      });
+
+      // Used for antd to check if is expand column
+      // We'd better to move selection into rc-table also
+      it('internal columnType', () => {
+        let existExpandColumn = false;
+
+        mount(
+          createTable({
+            expandable: {
+              expandedRowRender: () => null,
+            },
+            internalHooks: INTERNAL_HOOKS,
+            transformColumns: columns => {
+              existExpandColumn = columns.some(
+                col => col[INTERNAL_COL_DEFINE]?.columnType === 'EXPAND_COLUMN',
+              );
+              return columns;
+            },
+          }),
+        );
+
+        expect(existExpandColumn).toBeTruthy();
+      });
     });
 
     it('internalRefs', () => {
@@ -930,5 +956,36 @@ describe('Table.Basic', () => {
       wrapper.find('span.rc-table-row-expand-icon').last().simulate('click');
       expect(onExpandedRowsChange).toHaveBeenCalledWith(['parent', 'bamboo']);
     });
+  });
+
+  it('render index in tree table', () => {
+    const tColumns = [
+      {
+        title: 'Key',
+        dataIndex: 'key',
+      },
+      {
+        title: '行索引',
+        key: 'xxx',
+        render: (value, record, index) => index,
+      },
+    ];
+
+    const tData = [
+      { key: 'row0', children: [{ key: 'row0-0' }, { key: 'row0-1' }] },
+      { key: 'row1', children: [{ key: 'row1-0' }, { key: 'row1-1' }] },
+    ];
+    const wrapper = mount(
+      <Table columns={tColumns} expandable={{ defaultExpandAllRows: true }} data={tData} />,
+    );
+
+    const trs = wrapper.find('BodyRow');
+
+    expect(trs.at(0).find('Cell').at(1).text()).toEqual('0');
+    expect(trs.at(1).find('Cell').at(1).text()).toEqual('0');
+    expect(trs.at(2).find('Cell').at(1).text()).toEqual('1');
+    expect(trs.at(3).find('Cell').at(1).text()).toEqual('1');
+    expect(trs.at(4).find('Cell').at(1).text()).toEqual('0');
+    expect(trs.at(5).find('Cell').at(1).text()).toEqual('1');
   });
 });

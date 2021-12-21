@@ -200,31 +200,113 @@ describe('Table.Expand', () => {
     expect(wrapper2.find('.rc-table-has-fix-right').length).toBe(0);
   });
 
-  it('renders expand icon to the specify column', () => {
-    const wrapper = mount(
-      createTable({
-        expandable: {
-          expandedRowRender,
-          expandIconColumnIndex: 1,
-        },
-      }),
-    );
-    expect(
-      wrapper.find('tbody tr td').at(1).hasClass('rc-table-row-expand-icon-cell'),
-    ).toBeTruthy();
+  describe('config expand column index', () => {
+    it('not show EXPAND_COLUMN if expandable is false', () => {
+      resetWarned();
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      const wrapper = mount(
+        createTable({
+          columns: [...sampleColumns, Table.EXPAND_COLUMN],
+        }),
+      );
+
+      expect(wrapper.exists('.rc-table-row-expand-icon-cell')).toBeFalsy();
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        'Warning: `expandable` is not config but there exist `EXPAND_COLUMN` in `columns`.',
+      );
+      errorSpy.mockRestore();
+    });
+
+    it('renders expand icon to the specify column', () => {
+      resetWarned();
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      const wrapper = mount(
+        createTable({
+          expandable: {
+            expandedRowRender,
+            expandIconColumnIndex: 1,
+          },
+        }),
+      );
+      expect(
+        wrapper.find('tbody tr td').at(1).hasClass('rc-table-row-expand-icon-cell'),
+      ).toBeTruthy();
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        'Warning: `expandIconColumnIndex` is deprecated. Please use `Table.EXPAND_COLUMN` in `columns` instead.',
+      );
+      errorSpy.mockRestore();
+    });
+
+    it('order with EXPAND_COLUMN', () => {
+      const wrapper = mount(
+        createTable({
+          columns: [...sampleColumns, Table.EXPAND_COLUMN],
+          expandable: {
+            expandedRowRender,
+          },
+        }),
+      );
+
+      expect(
+        wrapper.find('tbody tr td').at(2).hasClass('rc-table-row-expand-icon-cell'),
+      ).toBeTruthy();
+    });
+
+    it('de-duplicate of EXPAND_COLUMN', () => {
+      resetWarned();
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      const wrapper = mount(
+        createTable({
+          columns: [Table.EXPAND_COLUMN, ...sampleColumns, Table.EXPAND_COLUMN],
+          expandable: {
+            expandedRowRender,
+          },
+        }),
+      );
+
+      expect(
+        wrapper.find('tbody tr td').at(0).hasClass('rc-table-row-expand-icon-cell'),
+      ).toBeTruthy();
+      expect(wrapper.find('tbody tr').first().find('td')).toHaveLength(3);
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        'Warning: There exist more than one `EXPAND_COLUMN` in `columns`.',
+      );
+
+      errorSpy.mockRestore();
+    });
   });
 
-  // https://github.com/ant-design/ant-design/issues/24129
-  it('should not render expand icon column when expandIconColumnIndex is negative', () => {
-    const wrapper = mount(
-      createTable({
-        expandable: {
-          expandedRowRender,
-          expandIconColumnIndex: -1,
-        },
-      }),
-    );
-    expect(wrapper.find('.rc-table-row-expand-icon-cell').length).toBe(0);
+  describe('hide expandColumn', () => {
+    // https://github.com/ant-design/ant-design/issues/24129
+    it('should not render expand icon column when expandIconColumnIndex is negative', () => {
+      const wrapper = mount(
+        createTable({
+          expandable: {
+            expandedRowRender,
+            expandIconColumnIndex: -1,
+          },
+        }),
+      );
+      expect(wrapper.find('.rc-table-row-expand-icon-cell').length).toBe(0);
+    });
+
+    it('showExpandColumn = false', () => {
+      const wrapper = mount(
+        createTable({
+          expandable: {
+            expandedRowRender,
+            showExpandColumn: false,
+          },
+        }),
+      );
+      expect(wrapper.find('.rc-table-row-expand-icon-cell').length).toBe(0);
+    });
   });
 
   it('renders a custom icon', () => {
@@ -498,5 +580,15 @@ describe('Table.Expand', () => {
       }),
     );
     expect(wrapper.find('.rc-table-expanded-row').length).toBe(0);
+  });
+
+  it('warning for use `expandedRowRender` and nested table in the same time', () => {
+    resetWarned();
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mount(createTable({ expandedRowRender, data: [{ children: [] }] }));
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Warning: `expandedRowRender` should not use with nested Table',
+    );
+    errorSpy.mockRestore();
   });
 });

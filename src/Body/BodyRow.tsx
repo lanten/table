@@ -49,10 +49,6 @@ function BodyRow<RecordType extends { children?: readonly RecordType[] }>(
   } = props;
   const { prefixCls, fixedInfoList } = React.useContext(TableContext);
   const {
-    fixHeader,
-    fixColumn,
-    horizonScroll,
-    componentWidth,
     flattenColumns,
     expandableType,
     expandRowByClick,
@@ -99,9 +95,7 @@ function BodyRow<RecordType extends { children?: readonly RecordType[] }>(
       onInternalTriggerExpand(record, event);
     }
 
-    if (additionalProps && additionalProps.onClick) {
-      additionalProps.onClick(event, ...args);
-    }
+    additionalProps?.onClick?.(event, ...args);
   };
 
   // ======================== Base tr row ========================
@@ -199,11 +193,7 @@ function BodyRow<RecordType extends { children?: readonly RecordType[] }>(
           computedExpandedRowClassName,
         )}
         prefixCls={prefixCls}
-        fixHeader={fixHeader}
-        fixColumn={fixColumn}
-        horizonScroll={horizonScroll}
         component={RowComponent}
-        componentWidth={componentWidth}
         cellComponent={cellComponent}
         colSpan={flattenColumns.length}
       >

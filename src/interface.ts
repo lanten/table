@@ -107,7 +107,7 @@ export interface StickyOffsets {
 export type GetComponentProps<DataType> = (
   data: DataType,
   index?: number,
-) => React.HTMLAttributes<HTMLElement>;
+) => React.HTMLAttributes<any> | React.TdHTMLAttributes<any>;
 
 type Component<P> =
   | React.ComponentType<P>
@@ -206,7 +206,9 @@ export interface ExpandableConfig<RecordType> {
   onExpandedRowsChange?: (expandedKeys: readonly Key[]) => void;
   defaultExpandAllRows?: boolean;
   indentSize?: number;
+  /** @deprecated Please use `EXPAND_COLUMN` in `columns` directly */
   expandIconColumnIndex?: number;
+  showExpandColumn?: boolean;
   expandedRowClassName?: RowClassName<RecordType>;
   childrenColumnName?: string;
   rowExpandable?: (record: RecordType) => boolean;

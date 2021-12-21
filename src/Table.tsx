@@ -26,6 +26,8 @@
 
 import * as React from 'react';
 import isVisible from 'rc-util/lib/Dom/isVisible';
+import pickAttrs from 'rc-util/lib/pickAttrs';
+import { isStyleSupport } from 'rc-util/lib/Dom/styleChecker';
 import classNames from 'classnames';
 import shallowEqual from 'shallowequal';
 import warning from 'rc-util/lib/warning';
@@ -63,7 +65,7 @@ import { getPathValue, mergeObject, validateValue, getColumnsKey } from './utils
 import ResizeContext from './context/ResizeContext';
 import useStickyOffsets from './hooks/useStickyOffsets';
 import ColGroup from './ColGroup';
-import { getExpandableProps, getDataAndAriaProps } from './utils/legacyUtil';
+import { getExpandableProps } from './utils/legacyUtil';
 import Panel from './Panel';
 import Footer, { FooterComponents } from './Footer';
 import { findAllChildrenKeys, renderExpandIcon } from './utils/expandUtil';
@@ -73,6 +75,9 @@ import useSticky from './hooks/useSticky';
 import FixedHolder from './FixedHolder';
 import type { SummaryProps } from './Footer/Summary';
 import Summary from './Footer/Summary';
+import StickyContext from './context/StickyContext';
+import ExpandedRowContext from './context/ExpandedRowContext';
+import { EXPAND_COLUMN } from './constant';
 
 // Used for conditions cache
 const EMPTY_DATA = [];
@@ -103,7 +108,8 @@ const MemoTableContent = React.memo<MemoTableContentProps>(
   },
 );
 
-export interface TableProps<RecordType = unknown> extends LegacyExpandableProps<RecordType> {
+export interface TableProps<RecordType = unknown>
+  extends Omit<LegacyExpandableProps<RecordType>, 'showExpandColumn'> {
   prefixCls?: string;
   className?: string;
   style?: React.CSSProperties;
@@ -336,6 +342,17 @@ function Table<RecordType extends DefaultRecordType>(props: TableProps<RecordTyp
     [getRowKey, mergedExpandedKeys, mergedData, onExpand, onExpandedRowsChange],
   );
 
+  // Warning if use `expandedRowRender` and nest children in the same time
+  if (
+    process.env.NODE_ENV !== 'production' &&
+    expandedRowRender &&
+    mergedData.some((record: RecordType) => {
+      return Array.isArray(record?.[mergedChildrenColumnName]);
+    })
+  ) {
+    warning(false, '`expandedRowRender` should not use with nested Table');
+  }
+
   // ====================== Column ======================
   const [componentWidth, setComponentWidth] = React.useState(0);
 
@@ -492,19 +509,21 @@ function Table<RecordType extends DefaultRecordType>(props: TableProps<RecordTyp
     }
   };
 
-  // Sync scroll bar when init or `horizonScroll` & `data` changed
+  // Sync scroll bar when init or `horizonScroll`, `data` and `columns.length` changed
   React.useEffect(() => triggerOnScroll, []);
   React.useEffect(() => {
     if (horizonScroll) {
       triggerOnScroll();
     }
-  }, [horizonScroll, data]);
+  }, [horizonScroll, data, columns.length]);
 
   // ===================== Effects ======================
   const [scrollbarSize, setScrollbarSize] = React.useState(0);
+  const [supportSticky, setSupportSticky] = React.useState(true); // Only IE not support, we mark as support first
 
   React.useEffect(() => {
     setScrollbarSize(getTargetScrollBarSize(scrollBodyRef.current).width);
+    setSupportSticky(isStyleSupport('position', 'sticky'));
   }, []);
 
   // ================== INTERNAL HOOKS ==================
@@ -721,7 +740,7 @@ function Table<RecordType extends DefaultRecordType>(props: TableProps<RecordTyp
     );
   }
 
-  const ariaProps = getDataAndAriaProps(props);
+  const ariaProps = pickAttrs(props, { aria: true, data: true });
 
   let fullTable = (
     <div
@@ -789,10 +808,6 @@ function Table<RecordType extends DefaultRecordType>(props: TableProps<RecordTyp
       tableLayout: mergedTableLayout,
       rowClassName,
       expandedRowClassName,
-      componentWidth,
-      fixHeader,
-      fixColumn,
-      horizonScroll,
       expandIcon: mergedExpandIcon,
       expandableType,
       expandRowByClick,
@@ -806,10 +821,6 @@ function Table<RecordType extends DefaultRecordType>(props: TableProps<RecordTyp
       mergedTableLayout,
       rowClassName,
       expandedRowClassName,
-      componentWidth,
-      fixHeader,
-      fixColumn,
-      horizonScroll,
       mergedExpandIcon,
       expandableType,
       expandRowByClick,
@@ -820,16 +831,31 @@ function Table<RecordType extends DefaultRecordType>(props: TableProps<RecordTyp
     ],
   );
 
+  const ExpandedRowContextValue = React.useMemo(
+    () => ({
+      componentWidth,
+      fixHeader,
+      fixColumn,
+    }),
+    [componentWidth, fixHeader, fixColumn],
+  );
+
   const ResizeContextValue = React.useMemo(() => ({ onColumnResize }), [onColumnResize]);
 
   return (
-    <TableContext.Provider value={TableContextValue}>
-      <BodyContext.Provider value={BodyContextValue}>
-        <ResizeContext.Provider value={ResizeContextValue}>{fullTable}</ResizeContext.Provider>
-      </BodyContext.Provider>
-    </TableContext.Provider>
+    <StickyContext.Provider value={supportSticky}>
+      <TableContext.Provider value={TableContextValue}>
+        <BodyContext.Provider value={BodyContextValue}>
+          <ExpandedRowContext.Provider value={ExpandedRowContextValue}>
+            <ResizeContext.Provider value={ResizeContextValue}>{fullTable}</ResizeContext.Provider>
+          </ExpandedRowContext.Provider>
+        </BodyContext.Provider>
+      </TableContext.Provider>
+    </StickyContext.Provider>
   );
 }
+
+Table.EXPAND_COLUMN = EXPAND_COLUMN;
 
 Table.Column = Column;
 

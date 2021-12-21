@@ -5,9 +5,10 @@ import ExpandedRow from './ExpandedRow';
 import BodyContext from '../context/BodyContext';
 import { getColumnsKey } from '../utils/valueUtil';
 import ResizeContext from '../context/ResizeContext';
-import MeasureCell from './MeasureCell';
 import BodyRow from './BodyRow';
 import useFlattenRecords from '../hooks/useFlattenRecords';
+import HoverContext from '../context/HoverContext';
+import MeasureRow from './MeasureRow';
 
 export interface BodyProps<RecordType> {
   data: readonly RecordType[];
@@ -32,27 +33,37 @@ function Body<RecordType>({
 }: BodyProps<RecordType>) {
   const { onColumnResize } = React.useContext(ResizeContext);
   const { prefixCls, getComponent } = React.useContext(TableContext);
-  const { fixHeader, horizonScroll, flattenColumns, componentWidth } =
-    React.useContext(BodyContext);
+  const { flattenColumns } = React.useContext(BodyContext);
 
-  const flattenData: { record: RecordType; indent: number }[] = useFlattenRecords<RecordType>(
-    data,
-    childrenColumnName,
-    expandedKeys,
-    getRowKey,
+  const flattenData: { record: RecordType; indent: number; index: number }[] =
+    useFlattenRecords<RecordType>(data, childrenColumnName, expandedKeys, getRowKey);
+
+  // ====================== Hover =======================
+  const [startRow, setStartRow] = React.useState(-1);
+  const [endRow, setEndRow] = React.useState(-1);
+
+  const onHover = React.useCallback((start: number, end: number) => {
+    setStartRow(start);
+    setEndRow(end);
+  }, []);
+
+  const hoverContext = React.useMemo(
+    () => ({ startRow, endRow, onHover }),
+    [onHover, startRow, endRow],
   );
 
-  return React.useMemo(() => {
+  // ====================== Render ======================
+  const bodyNode = React.useMemo(() => {
     const WrapperComponent = getComponent(['body', 'wrapper'], 'tbody');
     const trComponent = getComponent(['body', 'row'], 'tr');
     const tdComponent = getComponent(['body', 'cell'], 'td');
 
     let rows: React.ReactNode;
     if (data.length) {
-      rows = flattenData.map((item, index) => {
-        const { record, indent } = item;
+      rows = flattenData.map((item, idx) => {
+        const { record, indent, index: renderIndex } = item;
 
-        const key = getRowKey(record, index);
+        const key = getRowKey(record, idx);
 
         return (
           <BodyRow
@@ -60,7 +71,7 @@ function Body<RecordType>({
             rowKey={key}
             record={record}
             recordKey={key}
-            index={index}
+            index={renderIndex}
             rowComponent={trComponent}
             cellComponent={tdComponent}
             expandedKeys={expandedKeys}
@@ -78,11 +89,7 @@ function Body<RecordType>({
           expanded
           className={`${prefixCls}-placeholder`}
           prefixCls={prefixCls}
-          fixHeader={fixHeader}
-          fixColumn={horizonScroll}
-          horizonScroll={horizonScroll}
           component={trComponent}
-          componentWidth={componentWidth}
           cellComponent={tdComponent}
           colSpan={flattenColumns.length}
         >
@@ -97,15 +104,11 @@ function Body<RecordType>({
       <WrapperComponent className={`${prefixCls}-tbody`}>
         {/* Measure body column width with additional hidden col */}
         {measureColumnWidth && (
-          <tr
-            aria-hidden="true"
-            className={`${prefixCls}-measure-row`}
-            style={{ height: 0, fontSize: 0 }}
-          >
-            {columnsKey.map(columnKey => (
-              <MeasureCell key={columnKey} columnKey={columnKey} onColumnResize={onColumnResize} />
-            ))}
-          </tr>
+          <MeasureRow
+            prefixCls={prefixCls}
+            columnsKey={columnsKey}
+            onColumnResize={onColumnResize}
+          />
         )}
 
         {rows}
@@ -119,16 +122,15 @@ function Body<RecordType>({
     expandedKeys,
     getRowKey,
     getComponent,
-    componentWidth,
     emptyNode,
     flattenColumns,
     childrenColumnName,
-    fixHeader,
-    horizonScroll,
     onColumnResize,
     rowExpandable,
     flattenData,
   ]);
+
+  return <HoverContext.Provider value={hoverContext}>{bodyNode}</HoverContext.Provider>;
 }
 
 const MemoBody = React.memo(Body);
